@@ -1,0 +1,37 @@
+{
+    "compilerOptions": {
+      "target": "ES2020",                         // Cible ECMAScript 2020
+      "module": "commonjs",                       // Utilisation de CommonJS pour les modules
+      "lib": ["ES2020", "DOM"],                   // Bibliothèques ECMAScript 2020 et DOM
+      "outDir": "./dist",                         // Répertoire de sortie pour les fichiers compilés
+      "rootDir": "./src",                         // Répertoire de base où se trouvent les fichiers source
+      "strict": true,                             // Activer toutes les vérifications strictes
+      "noImplicitAny": true,                      // Signaler les erreurs sur les types implicites 'any'
+      "esModuleInterop": true,                    // Permet d'importer des modules CommonJS et ES Modules
+      "skipLibCheck": true,                       // Ne pas vérifier les types des fichiers de la bibliothèque
+      "forceConsistentCasingInFileNames": true,   // Assurer une cohérence dans la casse des noms de fichiers
+      "moduleResolution": "node",                 // Résolution de module à la manière de Node.js
+      "resolveJsonModule": true,                  // Permet d'importer des fichiers JSON
+      "allowSyntheticDefaultImports": true,       // Autoriser les importations par défaut synthétiques
+      "sourceMap": true,                          // Générer des source maps
+      "declaration": true,                        // Générer des déclarations de type (.d.ts)
+      "declarationMap": true,                     // Générer des cartes de déclaration
+      "composite": false,                         // Ce projet n'est pas un projet composite
+      "incremental": true,                        // Activer la compilation incrémentale
+      "noUncheckedIndexedAccess": true,           // Indexer l'accès à des objets de manière plus sûre
+      "noEmitOnError": false,                     // Ne pas générer de sortie en cas d'erreur
+      "baseUrl": "./",                            // Base URL pour résoudre les modules non relatifs
+      "paths": {                                  // Configuration des alias de chemins
+        "@uniswap/sdk-core": ["node_modules/@uniswap/sdk-core"],
+        "@flag-v3-sdk": ["node_modules/flag-v3-sdk"],
+        "*": ["src/*"]
+      }
+    },
+    "include": [
+      "src/**/*"                                  // Inclure tous les fichiers dans le dossier src
+    ],
+    "exclude": [
+      "node_modules",                             // Exclure les modules node
+      "**/*.spec.ts"                              // Exclure les fichiers de tests
+    ]
+  }

@@ -1,0 +1,30 @@
+{
+  "name": "arbitrage-skale",
+  "version": "1.0.0",
+  "description": "bot arbitrage uniswap v3",
+  "scripts": {
+    "start": "tsc && node ./dist/index.js",
+    "build": "tsc",
+    "dev": "ts-node src/swapData.ts",
+    "fetchTicks": "ts-node src/fetchTicks.ts",
+    "watch": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@uniswap/sdk-core": "^7.5.0",
+    "@uniswap/v3-periphery": "^1.4.4",
+    "@uniswap/v3-sdk": "^3.24.0",
+    "ethers": "^5.7.2",
+    "flag-v3-sdk": "^0.0.1",
+    "jsbi": "3.2.5",
+    "viem": "^2.22.13"
+  }
+}
