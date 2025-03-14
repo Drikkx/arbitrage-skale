@@ -18,9 +18,14 @@ import {
 const providerNebula = new ethers.providers.JsonRpcProvider('https://mainnet.skalenodes.com/v1/green-giddy-denebola');
 const providerEuropa = new ethers.providers.JsonRpcProvider('https://mainnet.skalenodes.com/v1/elated-tan-skat');
 
+// Configuration du wallet (remplacez par votre clé privée)
+const PRIVATE_KEY = 'VOTRE_CLÉ_PRIVÉE_ICI'; // À sécuriser (env var ou fichier séparé)
+const walletEuropa = new ethers.Wallet(PRIVATE_KEY, providerEuropa);
+const walletNebula = new ethers.Wallet(PRIVATE_KEY, providerNebula);
+
 interface SwapDetails {
-  token0Price: number; // Prix ajusté du token0 en token1
-  token1Price: number; // Prix ajusté du token1 en token0
+  token0Price: number; // Prix brut du token0 en token1
+  token1Price: number; // Prix brut du token1 en token0
 }
 
 interface PriceData {
@@ -32,26 +37,19 @@ interface PriceData {
 
 // Décimales des tokens
 const TOKEN_DECIMALS = {
-  USDC: 6,  // USDC standard
-  SKL: 18,  // SKL standard
-  FLAG: 18, // FLAG standard
-  rETH: 18  // rETH standard
+  USDC: 6,
+  SKL: 18,
+  FLAG: 18,
+  rETH: 18
 };
+
+// ABI simplifiée du SwapRouter Uniswap V3
+const SWAP_ROUTER_ABI = [
+  'function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'
+];
 
 /**
  * Calcule les détails de swap sans ajustement des décimales
- * 
- * Cette fonction calcule les prix et les quantités nécessaires pour effectuer un swap entre deux tokens.
- * Elle ne prend pas en compte les ajustements des décimales, ce qui peut entraîner des erreurs si les prix sont imprecis.
- * 
- * @param {string} poolAddress L'adresse du pool
- * @param {string} token0Address L'adresse du premier token
- * @param {string} token1Address L'adresse du deuxième token
- * @param {number} token0Decimals Le nombre de décimales pour le premier token
- * @param {number} token1Decimals Le nombre de décimales pour le deuxième token
- * @param {ethers.providers.JsonRpcProvider} provider Le fournisseur de données pour l'API ethers.js
- * 
- * @returns {SwapDetails} Les détails du swap, incluant les prix et les quantités nécessaires
  */
 async function calculateSwapDetails(
   poolAddress: string,
@@ -84,14 +82,8 @@ async function calculateSwapDetails(
     tick
   );
 
-  // Prix bruts du pool
-  const token0PriceRaw = parseFloat(pool.token0Price.toSignificant(6)); // token0 en token1
-  const token1PriceRaw = parseFloat(pool.token1Price.toSignificant(6)); // token1 en token0
-
-  // Ajustement correct des décimales
-  const decimalsAdjustment = 10 ** (token1Decimals - token0Decimals);
-  const token0Price = token0PriceRaw * decimalsAdjustment; // token0 en token1
-  const token1Price = token1PriceRaw / decimalsAdjustment; // token1 en token0
+  const token0Price = parseFloat(pool.token0Price.toSignificant(6));
+  const token1Price = parseFloat(pool.token1Price.toSignificant(6));
 
   return { token0Price, token1Price };
 }
@@ -106,13 +98,7 @@ async function getCoinGeckoPrices(): Promise<PriceData | null> {
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
-    return {
-      flagUsd: data['for-loot-and-glory'].usd,
-      rethUsd: data['rocket-pool-eth'].usd,
-      sklUsd: data['skale'].usd,
-      usdcUsd: data['usd-coin'].usd
-    };
+    return await response.json();
   } catch (error) {
     console.error('Erreur lors de la récupération des prix CoinGecko:', error);
     return null;
@@ -120,9 +106,41 @@ async function getCoinGeckoPrices(): Promise<PriceData | null> {
 }
 
 /**
- * Analyse les opportunités d'arbitrage
+ * Exécute un swap via le SwapRouter Uniswap V3
  */
-async function analyzeArbitrage() {
+async function executeSwap(
+  swapRouterAddress: string,
+  tokenIn: string,
+  tokenOut: string,
+  fee: number,
+  amountIn: ethers.BigNumber,
+  wallet: ethers.Wallet,
+  slippageTolerance: number = 0.01 // 1% de tolérance
+): Promise<void> {
+  const swapRouter = new ethers.Contract(swapRouterAddress, SWAP_ROUTER_ABI, wallet);
+  const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes
+
+  const params = {
+    tokenIn,
+    tokenOut,
+    fee,
+    recipient: wallet.address,
+    deadline,
+    amountIn,
+    amountOutMinimum: 0, // À ajuster avec un oracle ou calcul pour slippage
+    sqrtPriceLimitX96: 0
+  };
+
+  const tx = await swapRouter.exactInputSingle(params, { gasLimit: 300000 });
+  console.log(`Transaction envoyée: ${tx.hash}`);
+  await tx.wait();
+  console.log(`Swap exécuté: ${tx.hash}`);
+}
+
+/**
+ * Analyse et exécute les opportunités d'arbitrage
+ */
+async function analyzeAndExecuteArbitrage() {
   try {
     const coinGeckoData = await getCoinGeckoPrices();
     if (!coinGeckoData) throw new Error('Impossible de récupérer les données CoinGecko');
@@ -142,8 +160,9 @@ async function analyzeArbitrage() {
       TOKEN_DECIMALS.SKL,
       providerEuropa
     );
-    const usdcSklRate = usdcSklSwap.token0Price / 10 ** 12; // USDC -> SKL
-    const sklUsdcRate = usdcSklSwap.token1Price * 10 ** 12; // SKL -> USDC
+    const decimalsAdjustUsdcSkl = 10 ** (TOKEN_DECIMALS.SKL - TOKEN_DECIMALS.USDC); // 10^12
+    const usdcSklRate = usdcSklSwap.token0Price / decimalsAdjustUsdcSkl;
+    const sklUsdcRate = usdcSklSwap.token1Price * decimalsAdjustUsdcSkl;
     const sklUsdViaUsdc = sklUsdcRate * coinGeckoData.usdcUsd;
 
     console.log('\n=== Pool Europa (USDC/SKL) ===');
@@ -160,8 +179,9 @@ async function analyzeArbitrage() {
       TOKEN_DECIMALS.SKL,
       providerEuropa
     );
-    const flagSklRate = flagSklSwap.token0Price; // FLAG -> SKL
-    const sklFlagRate = flagSklSwap.token1Price; // SKL -> FLAG
+    const decimalsAdjustFlagSkl = 10 ** (TOKEN_DECIMALS.SKL - TOKEN_DECIMALS.FLAG); // 1
+    const flagSklRate = flagSklSwap.token0Price / decimalsAdjustFlagSkl;
+    const sklFlagRate = flagSklSwap.token1Price * decimalsAdjustFlagSkl;
     const flagUsdViaSkl = flagSklRate * sklUsdViaUsdc;
 
     console.log('\n=== Pool Europa (FLAG/SKL) ===');
@@ -178,8 +198,9 @@ async function analyzeArbitrage() {
       TOKEN_DECIMALS.rETH,
       providerNebula
     );
-    const flagRethRate = flagRethSwap.token0Price; // FLAG -> rETH
-    const rethFlagRate = flagRethSwap.token1Price; // rETH -> FLAG
+    const decimalsAdjustFlagReth = 10 ** (TOKEN_DECIMALS.rETH - TOKEN_DECIMALS.FLAG); // 1
+    const flagRethRate = flagRethSwap.token0Price / decimalsAdjustFlagReth;
+    const rethFlagRate = flagRethSwap.token1Price * decimalsAdjustFlagReth;
     const rethUsdViaFlag = rethFlagRate * flagUsdViaSkl;
 
     console.log('\n=== Pool Nebula (FLAG/rETH) ===');
@@ -188,7 +209,7 @@ async function analyzeArbitrage() {
     console.log(`Attendu (CoinGecko): 1 rETH ≈ ${(coinGeckoData.rethUsd / coinGeckoData.flagUsd).toFixed(2)} FLAG`);
 
     // Simulation d'arbitrage
-    const initialUsdc = 100;
+    const initialUsdc = 100; // Montant initial en USDC
     // Chemin aller
     const sklFromUsdc = initialUsdc * usdcSklRate;
     const flagFromSkl = sklFromUsdc * sklFlagRate;
@@ -209,23 +230,89 @@ async function analyzeArbitrage() {
     console.log('Chemin retour (USDC → rETH → FLAG → SKL → USDC):');
     console.log(`Résultat final: $${finalUsdcReverse.toFixed(2)} | Profit: $${profitReverse.toFixed(2)}`);
 
-    // Recommandation avec seuil
-    console.log('\n=== Recommandation ===');
-    const profitThreshold = 10; // Seuil minimal pour couvrir les frais
+    // Exécution des swaps si profitables
+    const profitThreshold = 10;
     if (profitForward > profitThreshold) {
-      console.log('→ Arbitrage profitable dans le sens aller');
-      console.log('   USDC → SKL (Europa) → FLAG (Europa) → rETH (Nebula) → USDC (Mainnet)');
+      console.log('\n=== Exécution Arbitrage Aller ===');
+      // USDC → SKL (Europa)
+      const usdcAmountIn = ethers.utils.parseUnits(initialUsdc.toString(), TOKEN_DECIMALS.USDC);
+      await executeSwap(
+        swapRouter_Europa,
+        USDC_EUROPA_ADDRESS,
+        SKL_EUROPA_ADDRESS,
+        3000, // Fee tier (0.3%, ajustez selon le pool)
+        usdcAmountIn,
+        walletEuropa
+      );
+
+      // SKL → FLAG (Europa)
+      const sklAmountIn = ethers.utils.parseUnits(sklFromUsdc.toFixed(0), TOKEN_DECIMALS.SKL);
+      await executeSwap(
+        swapRouter_Europa,
+        SKL_EUROPA_ADDRESS,
+        FLAG_EUROPA_ADDRESS,
+        3000,
+        sklAmountIn,
+        walletEuropa
+      );
+
+      // FLAG → rETH (Nebula)
+      const flagAmountIn = ethers.utils.parseUnits(flagFromSkl.toFixed(0), TOKEN_DECIMALS.FLAG);
+      await executeSwap(
+        swapRouter_Nebula,
+        FLAG_NEBULA_ADDRESS,
+        rETH_NEBULA_ADDRESS,
+        3000,
+        flagAmountIn,
+        walletNebula
+      );
+
+      console.log('Arbitrage aller exécuté avec succès !');
     } else if (profitReverse > profitThreshold) {
-      console.log('→ Arbitrage profitable dans le sens retour');
-      console.log('   USDC (Mainnet) → rETH → FLAG (Nebula) → SKL (Europa) → USDC (Europa)');
+      console.log('\n=== Exécution Arbitrage Retour ===');
+      // USDC → rETH (assumé sur Mainnet ou Nebula, à ajuster)
+      const usdcAmountIn = ethers.utils.parseUnits(initialUsdc.toString(), TOKEN_DECIMALS.USDC);
+      await executeSwap(
+        swapRouter_Nebula, // À ajuster si Mainnet
+        USDC_EUROPA_ADDRESS,
+        rETH_NEBULA_ADDRESS,
+        3000,
+        usdcAmountIn,
+        walletNebula
+      );
+
+      // rETH → FLAG (Nebula)
+      const rethAmountIn = ethers.utils.parseUnits(rethFromUsdc.toFixed(0), TOKEN_DECIMALS.rETH);
+      await executeSwap(
+        swapRouter_Nebula,
+        rETH_NEBULA_ADDRESS,
+        FLAG_NEBULA_ADDRESS,
+        3000,
+        rethAmountIn,
+        walletNebula
+      );
+
+      // FLAG → SKL (Europa)
+      const flagAmountIn = ethers.utils.parseUnits(flagFromReth.toFixed(0), TOKEN_DECIMALS.FLAG);
+      await executeSwap(
+        swapRouter_Europa,
+        FLAG_EUROPA_ADDRESS,
+        SKL_EUROPA_ADDRESS,
+        3000,
+        flagAmountIn,
+        walletEuropa
+      );
+
+      console.log('Arbitrage retour exécuté avec succès !');
     } else {
+      console.log('\n=== Recommandation ===');
       console.log('→ Pas d’opportunité d’arbitrage rentable détectée après frais estimés');
     }
 
   } catch (error) {
-    console.error('Erreur lors de l’analyse:', error);
+    console.error('Erreur lors de l’analyse ou exécution:', error);
   }
 }
 
 // Exécution
-analyzeArbitrage();
+analyzeAndExecuteArbitrage();

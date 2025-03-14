@@ -1,2 +1,16 @@
 # arbitrage-skale
- bot arbitrage uniswap v3
+
+## Installation 
+
+install : 
+
+```bash
+pnpm install
+```
+
+
+run :
+
+```bash
+pnpm run swapData
+```
