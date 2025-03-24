@@ -2,7 +2,7 @@ import { createPublicClient, formatEther, http, parseAbiItem, Log } from 'viem';
 import { skaleNebula } from 'viem/chains';
 
 const TARGET_ADDRESS = '0x3b0583e48b5F6b85FcE21bE6df42d437AE78B78d';
-const FLAG_TOKEN_ADDRESS = '0x082081c8E607ca6C1c53aC093cAb3847ED59C0b0';
+const RETH_TOKEN_ADDRESS = '0xa17dc9A0b3057F0c8169CEA7536B0f6bc46bc414';
 const BlockDeploy = 22218510;
 const CHUNK_SIZE = 2000n;
 
@@ -34,7 +34,7 @@ async function analyzeTransfers(): Promise<void> {
       console.log(`Scanning blocks ${fromBlock} to ${toBlock}...`);
       
       const logs = await publicClient.getLogs({
-        address: FLAG_TOKEN_ADDRESS as `0x${string}`,
+        address: RETH_TOKEN_ADDRESS as `0x${string}`,
         event: transferEventAbi,
         args: {
           to: TARGET_ADDRESS as `0x${string}`
@@ -52,7 +52,7 @@ async function analyzeTransfers(): Promise<void> {
       fromBlock = toBlock + 1n;
     }
     
-    console.log(`\nTotal FLAG tokens transferred to ${TARGET_ADDRESS}: ${formatEther(totalTransferred)} FLAG`);
+    console.log(`\nTotal rETH tokens transferred to ${TARGET_ADDRESS}: ${formatEther(totalTransferred)} rETH`);
     
   } catch (error) {
     console.error('Error analyzing transfers:', error);
