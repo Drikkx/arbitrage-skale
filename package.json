@@ -8,6 +8,7 @@
     "dev": "ts-node src/swapData.ts",
     "swapData": "ts-node src/swapData.ts",
     "indexer": "ts-node src/indexer.ts",
+    "analyzeTransfers": "ts-node src/analyze_transfers.ts",
     "watch": "tsc --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
